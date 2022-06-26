@@ -1,0 +1,8 @@
+plugins {
+    id "com.github.c64lib.retro-assembler" version "1.5.2"
+}
+
+retroProject {
+    dialect = "KickAssembler"
+    dialectVersion = "5.24"
+}
