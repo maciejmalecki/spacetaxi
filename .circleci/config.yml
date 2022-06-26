@@ -18,7 +18,7 @@ jobs:
             - run: mkdir out
             - run: mkdir work
             - run: ./gradlew build --stacktrace
-            - run: cp *.prg -o work/
+            - run: cp *.prg work/
             - persist-to-workspace:
                 root: .
                 paths:
