@@ -6,3 +6,30 @@ retroProject {
     dialect = "KickAssembler"
     dialectVersion = "5.24"
 }
+
+preprocess {
+    charpad {
+        input = file("backdrops.ctm")
+        outputs {
+            meta {
+                dialect = "KickAssembler"
+                output = file("metadata.asm")
+            }
+            charset {
+                output = file("charset.bin")
+            }
+            charsetColours {
+                output = file("colours.bin")
+            }
+            map {
+                left = 0
+                right = 29
+                interleaver {
+                    output = file("level1.bin")
+                }
+                interleaver {
+                }
+            }
+        }
+    }
+}
