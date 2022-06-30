@@ -22,7 +22,19 @@ preprocess {
                 output = file("colours.bin")
             }
             map {
-                right = 11
+                left = 0
+                right = 40
+                bottom = 25
+                interleaver {
+                    output = file("title.bin")
+                }
+                interleaver {
+                }
+            }
+            map {
+                left = 40
+                right = 51
+                bottom = 25
                 interleaver {
                     output = file("dashboard.bin")
                 }
@@ -30,8 +42,9 @@ preprocess {
                 }
             }
             map {
-                left = 11
-                right = 40
+                top = 25
+                left = 0
+                right = 29
                 interleaver {
                     output = file("level1.bin")
                 }
@@ -39,8 +52,9 @@ preprocess {
                 }
             }
             map {
-                left = 40
-                right = 69
+                top = 25
+                left = 29
+                right = 58
                 interleaver {
                     output = file("level2.bin")
                 }
