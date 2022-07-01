@@ -40,6 +40,49 @@ initScreen: {
     rts
 }
 
+initGame: {
+    lda #1
+    sta levelCounter
+    lda #3
+    sta livesCounter
+    rts
+}
+
+initLevel: {
+    jsr copyDashboard
+    lda levelCounter
+    cmp #1
+    bne !+
+        jsr initLevel1
+        jmp continue
+    !:
+    cmp #2
+    bne !+
+        jsr initLevel2
+        jmp continue
+    !:
+    continue:
+        jsr copyLevel
+
+    // set up player
+    lda #0
+    sta verticalSpeed
+    sta horizontalSpeed
+    rts
+}
+
+initLevel1: {
+    lda #<level1
+    ldx #>level1
+    rts
+}
+
+initLevel2: {
+    lda #<level2
+    ldx #>level2
+    rts
+}
+
 // ==== screen drawing routines ====
 
 /*
@@ -94,6 +137,13 @@ drawTitleScreen: {
     rts
 }
 
+// ==== variables ====
+levelCounter:       .byte 0
+livesCounter:       .byte 0
+joyState:           .byte 0
+verticalSpeed:      .byte 0 // signed
+horizontalSpeed:    .byte 0 // signed
+
 // ==== data ====
 colours:        .import binary "build/charpad/colours.bin"
 titleScreen:    .import binary "build/charpad/title.bin"
@@ -104,6 +154,8 @@ level2:         .import binary "build/charpad/level2.bin"
 // to save time and coding efforts charset and sprites are moved streight to the target location within VIC-II address space
 *=($4000 - $0800)
 .import binary "build/charpad/charset.bin"
+*=($4000 - 3*64)
+.import binary "build/spritepad/player.bin"
 
 end:
 .print "Program size = " + (end - start + 1)
