@@ -53,6 +53,12 @@ initScreen: {
     lda #backgroundColour2
     sta $D023
 
+    // init sprite colours
+    lda #12
+    sta $D025
+    lda #11
+    sta $D026
+
     // set charset mem bank to the last one (we'll use default screen location)
     lda $D018
     ora #%00001110
@@ -66,11 +72,27 @@ initScreen: {
     rts
 }
 
+initSprites: {
+    // init player sprite
+    lda #15
+    sta $D027
+    lda $D01C
+    ora #%00000001
+    sta $D01C       // sprite 0 multicolor
+    lda #(256-3)
+    sta SCREEN + 1024 - 8
+    lda $D015
+    ora #%00000001
+    sta $D015       // show sprite
+    rts
+}
+
 initGame: {
     lda #1
     sta levelCounter
     lda #3
     sta livesCounter
+    jsr initSprites
     rts
 }
 
@@ -79,6 +101,10 @@ initLevel: {
     lda levelCounter
     cmp #1
     bne !+
+        lda #150
+        sta $D000
+        lda #100
+        sta $D001
         jsr initLevel1
         jmp continue
     !:
@@ -186,6 +212,15 @@ verticalSpeed:      .byte 0 // signed
 horizontalSpeed:    .byte 0 // signed
 
 // ==== data ====
+.label SPEED_TABLE_HALF_SIZE = 8
+.label SPEED_TABLE_SIZE = (SPEED_TABLE_HALF_SIZE - 1)*2 + 1
+speedTable:     .fill SPEED_TABLE_HALF_SIZE - 1, -(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i)
+                .byte 0
+                .fill SPEED_TABLE_HALF_SIZE - 1, (i+1)*(i+1)
+
+
+
+
 colours:        .import binary "build/charpad/colours.bin"
 titleScreen:    .import binary "build/charpad/title.bin"
 dashboard:      .import binary "build/charpad/dashboard.bin"
@@ -197,6 +232,3 @@ level2:         .import binary "build/charpad/level2.bin"
 .import binary "build/charpad/charset.bin"
 *=($4000 - 3*64) "Sprites"
 .import binary "build/spritepad/player.bin"
-
-end:
-.print "Program size = " + (end - start + 1)
