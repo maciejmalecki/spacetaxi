@@ -18,6 +18,7 @@ start: {
 
 // game initialization
 initScreen: {
+    // init colours
     lda #backgroundColour0
     sta $D020
     sta $D021
@@ -25,9 +26,19 @@ initScreen: {
     sta $D022
     lda #backgroundColour2
     sta $D023
+
+    // set charset mem bank to the last one (we'll use default screen location)
+    lda $D018
+    ora #%00001110
+    sta $D018
+
+    // set screen mode to multicolor
+    lda $D016
+    ora #%00010000
+    sta $D016
+
     rts
 }
-
 
 // ==== screen drawing routines ====
 
@@ -84,13 +95,15 @@ drawTitleScreen: {
 }
 
 // ==== data ====
-
 colours:        .import binary "build/charpad/colours.bin"
-charset:        .import binary "build/charpad/charset.bin"
 titleScreen:    .import binary "build/charpad/title.bin"
 dashboard:      .import binary "build/charpad/dashboard.bin"
 level1:         .import binary "build/charpad/level1.bin"
 level2:         .import binary "build/charpad/level2.bin"
+
+// to save time and coding efforts charset and sprites are moved streight to the target location within VIC-II address space
+*=($4000 - $0800)
+.import binary "build/charpad/charset.bin"
 
 end:
 .print "Program size = " + (end - start + 1)
