@@ -11,12 +11,38 @@ BasicUpstart(start) // Basic start routine
 *=$080d "Program"
 
 start: {
+    jsr initIO
     jsr initScreen
     jsr drawTitleScreen
+    outerMainLoop:
+        jsr readJoy
+        lda joyState
+        and #%00010000
+        bne !+
+            jsr startGame
+        !:
+    jmp outerMainLoop
+}
+
+startGame: {
+    jsr initGame
+    jsr initLevel
+    mainLoop:
+        jmp mainLoop
+    gameOver:
     rts
 }
 
 // game initialization
+
+initIO: {
+    // set IO pins for joy 2 to input
+    lda $DC02
+    and #%11100000
+    sta $DC02
+    rts
+}
+
 initScreen: {
     // init colours
     lda #backgroundColour0
@@ -49,7 +75,7 @@ initGame: {
 }
 
 initLevel: {
-    jsr copyDashboard
+    jsr drawDashboard
     lda levelCounter
     cmp #1
     bne !+
@@ -80,6 +106,14 @@ initLevel1: {
 initLevel2: {
     lda #<level2
     ldx #>level2
+    rts
+}
+
+// ==== IO handling ====
+readJoy: {
+    lda $DC00
+    and #%00011111
+    sta joyState
     rts
 }
 
@@ -137,6 +171,13 @@ drawTitleScreen: {
     rts
 }
 
+drawDashboard: {
+    lda #<dashboard
+    ldx #>dashboard
+    jsr copyDashboard
+    rts
+}
+
 // ==== variables ====
 levelCounter:       .byte 0
 livesCounter:       .byte 0
@@ -152,9 +193,9 @@ level1:         .import binary "build/charpad/level1.bin"
 level2:         .import binary "build/charpad/level2.bin"
 
 // to save time and coding efforts charset and sprites are moved streight to the target location within VIC-II address space
-*=($4000 - $0800)
+*=($4000 - $0800) "Charset"
 .import binary "build/charpad/charset.bin"
-*=($4000 - 3*64)
+*=($4000 - 3*64) "Sprites"
 .import binary "build/spritepad/player.bin"
 
 end:
