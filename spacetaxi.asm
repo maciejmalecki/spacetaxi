@@ -2,7 +2,11 @@
 
 .label SCREEN = $0400
 .label COLOUR_RAM = $D800
-
+.label PLAYER_SHAPE_NEUTRAL = 0
+.label PLAYER_SHAPE_LEFT = 1
+.label PLAYER_SHAPE_RIGHT = 2
+.label SHAPES_COUNT = 3
+.label PLAYER_SPRITE = 0
 
 *=$0801 "Basic Upstart"
 BasicUpstart(start) // Basic start routine
@@ -11,6 +15,7 @@ BasicUpstart(start) // Basic start routine
 *=$080d "Program"
 
 start: {
+    jsr initIRQ
     jsr initIO
     jsr initScreen
     jsr drawTitleScreen
@@ -27,13 +32,55 @@ start: {
 startGame: {
     jsr initGame
     jsr initLevel
+    jsr enableIRQ
     mainLoop:
+        jsr readJoy
         jmp mainLoop
     gameOver:
+    jsr disableIRQ
     rts
 }
 
+doOnEachFrame: {
+    jsr updatePositions
+    jsr animate
+    jsr checkCollision
+    dec $D019 // clear interrupt flag
+    jmp $EA31
+}
+
 // game initialization
+initIRQ: {
+    sei
+    // disable CIA#1 interrupts
+    lda #$7F
+    sta $DC0D
+    lda $DC0D
+    // set new IRQ handler
+    lda #<doOnEachFrame
+    sta $0314
+    lda #>doOnEachFrame
+    sta $0315
+    cli
+    rts
+}
+
+enableIRQ: {
+    lda #40
+    sta $D012
+    lda $D011
+    and #%0111111
+    sta $D011
+    lda #%00000001
+    sta $D01A
+    rts
+}
+
+disableIRQ: {
+    lda #%00000000
+    sta $D01A
+    rts
+}
 
 initIO: {
     // set IO pins for joy 2 to input
@@ -79,8 +126,7 @@ initSprites: {
     lda $D01C
     ora #%00000001
     sta $D01C       // sprite 0 multicolor
-    lda #(256-3)
-    sta SCREEN + 1024 - 8
+    setShapeForSprite(PLAYER_SHAPE_NEUTRAL, PLAYER_SPRITE)
     lda $D015
     ora #%00000001
     sta $D015       // show sprite
@@ -117,9 +163,9 @@ initLevel: {
         jsr copyLevel
 
     // set up player
-    lda #0
-    sta verticalSpeed
-    sta horizontalSpeed
+    lda #SPEED_TABLE_HALF_SIZE
+    sta verticalPosition
+    sta horizontalPosition
     rts
 }
 
@@ -141,6 +187,101 @@ readJoy: {
     and #%00011111
     sta joyState
     rts
+}
+
+// ==== Game physics ====
+updatePositions: {
+    lda joyState
+    and #%00000100 // left
+    bne !+
+    jsr joyLeft
+!:
+    lda joyState
+    and #%00001000 // right
+    bne !+
+    jsr joyRight
+!:
+    jmp checkUp
+joyLeft:
+    lda horizontalPosition
+    beq checkUp
+    dec horizontalPosition
+    jmp checkUp
+joyRight:
+    lda horizontalPosition
+    cmp #SPEED_TABLE_SIZE
+    beq checkUp
+    inc horizontalPosition
+checkUp:
+    lda joyState
+    and #%00000001 // up
+    bne !+
+    jmp joyUp
+!:
+    lda verticalPosition
+    cmp #SPEED_TABLE_SIZE
+    beq end
+    inc verticalPosition  // here gravity works
+    jmp end
+joyUp:
+    lda verticalPosition
+    beq end
+    dec verticalPosition
+    jmp end
+end:
+    rts
+}
+
+animate: {
+    // move player
+    lda $D000
+    ldx horizontalPosition
+    cpx #SPEED_TABLE_HALF_SIZE
+    bcs !+
+    jmp goLeft
+!:
+    bne goRight
+    setShapeForSprite(PLAYER_SHAPE_NEUTRAL, PLAYER_SPRITE)
+    jmp animateVertical
+goLeft:
+    sec
+    sbc speedTable,x
+    sta $D000
+    setShapeForSprite(PLAYER_SHAPE_LEFT, PLAYER_SPRITE)
+    jmp animateVertical
+goRight:
+    clc
+    adc speedTable,x
+    sta $D000
+    setShapeForSprite(PLAYER_SHAPE_RIGHT, PLAYER_SPRITE)
+animateVertical:
+    lda $D001
+    ldx verticalPosition
+    cpx #SPEED_TABLE_HALF_SIZE
+    bcs !+
+    jmp goUp
+!:
+    bne goDown
+goUp:
+    sec
+    sbc speedTable,x
+    sta $D001
+    rts
+goDown:
+    clc
+    adc speedTable,x
+    sta $D001
+    rts
+}
+
+checkCollision: {
+    rts
+}
+
+// ==== sprites routines ====
+.macro setShapeForSprite(shapeNum, spriteNum) {
+    lda #(256 - SHAPES_COUNT + shapeNum)
+    sta SCREEN + 1024 - 8 + spriteNum
 }
 
 // ==== screen drawing routines ====
@@ -208,18 +349,24 @@ drawDashboard: {
 levelCounter:       .byte 0
 livesCounter:       .byte 0
 joyState:           .byte 0
-verticalSpeed:      .byte 0 // signed
-horizontalSpeed:    .byte 0 // signed
+verticalPosition:   .byte 0 // signed
+horizontalPosition:    .byte 0 // signed
 
 // ==== data ====
 .label SPEED_TABLE_HALF_SIZE = 8
 .label SPEED_TABLE_SIZE = (SPEED_TABLE_HALF_SIZE - 1)*2 + 1
-speedTable:     .fill SPEED_TABLE_HALF_SIZE - 1, -(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i)
+speedTable:     .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.05*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
                 .byte 0
-                .fill SPEED_TABLE_HALF_SIZE - 1, (i+1)*(i+1)
+                .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.05*(i+1)*(i+1))
 
+.for (var i = 0; i < SPEED_TABLE_HALF_SIZE; i++) {
+    .print ceil(0.05*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
+}
+.for (var i = 0; i < SPEED_TABLE_HALF_SIZE; i++) {
+    .print ceil(0.05*(i+1)*(i+1))
+}
 
-
+.print SPEED_TABLE_SIZE
 
 colours:        .import binary "build/charpad/colours.bin"
 titleScreen:    .import binary "build/charpad/title.bin"
@@ -227,7 +374,10 @@ dashboard:      .import binary "build/charpad/dashboard.bin"
 level1:         .import binary "build/charpad/level1.bin"
 level2:         .import binary "build/charpad/level2.bin"
 
-// to save time and coding efforts charset and sprites are moved streight to the target location within VIC-II address space
+/*
+ * To save time and coding efforts charset and sprites are moved straight to the target location within VIC-II address space
+ * thus it is probably a good idea to pack the game with i.e. Exomizer after compiling.
+ */
 *=($4000 - $0800) "Charset"
 .import binary "build/charpad/charset.bin"
 *=($4000 - 3*64) "Sprites"
