@@ -7,6 +7,7 @@
 .label PLAYER_SHAPE_RIGHT = 2
 .label SHAPES_COUNT = 3
 .label PLAYER_SPRITE = 0
+.label ANIMATION_DELAY_MAX = 50
 
 *=$0801 "Basic Upstart"
 BasicUpstart(start) // Basic start routine
@@ -34,7 +35,6 @@ startGame: {
     jsr initLevel
     jsr enableIRQ
     mainLoop:
-        jsr readJoy
         jmp mainLoop
     gameOver:
     jsr disableIRQ
@@ -166,6 +166,9 @@ initLevel: {
     lda #SPEED_TABLE_HALF_SIZE
     sta verticalPosition
     sta horizontalPosition
+    // set up delay
+    lda #ANIMATION_DELAY_MAX
+    sta animationDelay
     rts
 }
 
@@ -191,6 +194,17 @@ readJoy: {
 
 // ==== Game physics ====
 updatePositions: {
+    ldx animationDelay
+    dex
+    bne !+
+    stx animationDelay
+    rts
+!:
+    ldx #ANIMATION_DELAY_MAX
+    stx animationDelay
+
+    jsr readJoy
+
     lda joyState
     and #%00000100 // left
     bne !+
@@ -209,7 +223,7 @@ joyLeft:
     jmp checkUp
 joyRight:
     lda horizontalPosition
-    cmp #SPEED_TABLE_SIZE
+    cmp #(SPEED_TABLE_SIZE-1)
     beq checkUp
     inc horizontalPosition
 checkUp:
@@ -219,7 +233,7 @@ checkUp:
     jmp joyUp
 !:
     lda verticalPosition
-    cmp #SPEED_TABLE_SIZE
+    cmp #(SPEED_TABLE_SIZE-1)
     beq end
     inc verticalPosition  // here gravity works
     jmp end
@@ -349,8 +363,9 @@ drawDashboard: {
 levelCounter:       .byte 0
 livesCounter:       .byte 0
 joyState:           .byte 0
-verticalPosition:   .byte 0 // signed
-horizontalPosition:    .byte 0 // signed
+verticalPosition:   .byte 0
+horizontalPosition: .byte 0
+animationDelay:     .byte 0
 
 // ==== data ====
 .label SPEED_TABLE_HALF_SIZE = 8
@@ -358,15 +373,6 @@ horizontalPosition:    .byte 0 // signed
 speedTable:     .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.05*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
                 .byte 0
                 .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.05*(i+1)*(i+1))
-
-.for (var i = 0; i < SPEED_TABLE_HALF_SIZE; i++) {
-    .print ceil(0.05*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
-}
-.for (var i = 0; i < SPEED_TABLE_HALF_SIZE; i++) {
-    .print ceil(0.05*(i+1)*(i+1))
-}
-
-.print SPEED_TABLE_SIZE
 
 colours:        .import binary "build/charpad/colours.bin"
 titleScreen:    .import binary "build/charpad/title.bin"
