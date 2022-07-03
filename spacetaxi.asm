@@ -5,7 +5,8 @@
 .label PLAYER_SHAPE_NEUTRAL = 0
 .label PLAYER_SHAPE_LEFT = 1
 .label PLAYER_SHAPE_RIGHT = 2
-.label SHAPES_COUNT = 3
+.label SURVIVOR_SHAPE = 3
+.label SHAPES_COUNT = 4
 .label PLAYER_SPRITE = 0
 .label ANIMATION_DELAY_MAX = 50
 
@@ -32,10 +33,17 @@ start: {
 
 startGame: {
     jsr initGame
-    jsr initLevel
-    jsr enableIRQ
+    levelLoop:
+        jsr initLevel
+        jsr enableIRQ
     mainLoop:
+        lda gameState
+        and #%00000001
+        bne liveLost
         jmp mainLoop
+    liveLost:
+        jsr disableIRQ
+        jmp levelLoop
     gameOver:
     jsr disableIRQ
     rts
@@ -124,12 +132,33 @@ initSprites: {
     lda #15
     sta $D027
     lda $D01C
-    ora #%00000001
+    ora #%00011111
     sta $D01C       // sprite 0 multicolor
     setShapeForSprite(PLAYER_SHAPE_NEUTRAL, PLAYER_SPRITE)
+    ldx #0
+!:
+    lda survivors1,x
+    beq endOfSprites
+    sta $D002,x
+    inx
+    lda survivors1,x
+    sta $D002,x
+    inx
+    jmp !-
+endOfSprites:
+    .for (var i = 0; i < 4; i++) {
+        setShapeForSprite(SURVIVOR_SHAPE, i + 1)
+    }
+    lda #10
+    sta $D028
+    sta $D029
+    sta $D02A
+    sta $D02B
     lda $D015
-    ora #%00000001
+    ora #%00011111
     sta $D015       // show sprite
+    lda $D01F       // clear collision detection
+    lda $D01E
     rts
 }
 
@@ -143,6 +172,8 @@ initGame: {
 }
 
 initLevel: {
+    lda #0
+    sta gameState
     jsr drawDashboard
     lda levelCounter
     cmp #1
@@ -278,17 +309,32 @@ animateVertical:
     bne goDown
 goUp:
     sec
-    sbc speedTable,x
+    sbc speedTableVertical,x
     sta $D001
     rts
 goDown:
     clc
-    adc speedTable,x
+    adc speedTableVertical,x
     sta $D001
     rts
 }
 
 checkCollision: {
+    lda $D01F
+    and #%00000001
+    beq !+
+        lda gameState
+        ora #%00000001
+        sta gameState
+!:
+    lda $D01E
+    and #%00011110
+    beq !+
+        eor $D015
+        and #%00011111
+        ora #%00000001
+        sta $D015
+!:
     rts
 }
 
@@ -366,13 +412,19 @@ joyState:           .byte 0
 verticalPosition:   .byte 0
 horizontalPosition: .byte 0
 animationDelay:     .byte 0
+gameState:          .byte 0
 
 // ==== data ====
 .label SPEED_TABLE_HALF_SIZE = 8
 .label SPEED_TABLE_SIZE = (SPEED_TABLE_HALF_SIZE - 1)*2 + 1
-speedTable:     .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.05*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
+speedTable:     .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.02*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
                 .byte 0
-                .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.05*(i+1)*(i+1))
+                .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.02*(i+1)*(i+1))
+speedTableVertical: .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.03*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
+                    .byte 0
+                    .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.01*(i+1)*(i+1))
+
+survivors1:    .byte 60, 85, 90, 221, 210, 221, 200, 141, 0
 
 colours:        .import binary "build/charpad/colours.bin"
 titleScreen:    .import binary "build/charpad/title.bin"
@@ -386,5 +438,6 @@ level2:         .import binary "build/charpad/level2.bin"
  */
 *=($4000 - $0800) "Charset"
 .import binary "build/charpad/charset.bin"
-*=($4000 - 3*64) "Sprites"
+*=($4000 - SHAPES_COUNT*64) "Sprites"
 .import binary "build/spritepad/player.bin"
+.import binary "build/spritepad/survivor.bin"

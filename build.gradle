@@ -71,6 +71,11 @@ preprocess {
                 end = 3
                 output = file("player.bin")
             }
+            sprites {
+                start = 3
+                end = 4
+                output = file("survivor.bin")
+            }
         }
     }
 }
