@@ -356,7 +356,7 @@ checkCollision: {
     sta sourceAddress
     stx sourceAddress + 1
 
-    .for(var line = 0; line < 25; line++) {     // unroll outer loop
+    .for(var line = 0; line < 25; line++) { // unroll outer loop
         ldx #width
         !:
             dex
@@ -420,7 +420,7 @@ gameState:          .byte 0
 speedTable:     .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.02*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
                 .byte 0
                 .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.02*(i+1)*(i+1))
-speedTableVertical: .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.03*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
+speedTableVertical: .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.02*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
                     .byte 0
                     .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.01*(i+1)*(i+1))
 
