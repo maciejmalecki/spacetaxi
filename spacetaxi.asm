@@ -8,7 +8,14 @@
 .label SURVIVOR_SHAPE = 3
 .label SHAPES_COUNT = 4
 .label PLAYER_SPRITE = 0
-.label ANIMATION_DELAY_MAX = 50
+.label ANIMATION_DELAY_MAX = 100
+.label GRAVITY_ACCELERATION = 5
+.label UP_ACCELERATION = 5
+.label VERTICAL_ACCELERATION = 5
+
+.label PLAYER_LEFT  = %00000100
+.label PLAYER_RIGHT = %00000010
+.label PLAYER_UP    = %00000001
 
 *=$0801 "Basic Upstart"
 BasicUpstart(start) // Basic start routine
@@ -50,7 +57,8 @@ startGame: {
 }
 
 doOnEachFrame: {
-    jsr updatePositions
+    jsr handleControls
+    jsr updatePosition
     jsr animate
     jsr checkCollision
     dec $D019 // clear interrupt flag
@@ -172,15 +180,25 @@ initGame: {
 }
 
 initLevel: {
+    // set up player
+    zeroWord(vAcceleration)
+    zeroWord(hAcceleration)
+    zeroWord(vSpeed)
+    zeroWord(hSpeed)
+    setWord(hPosition, 256*150)
+    setWord(vPosition, 256*100)
+    // set up state
     lda #0
     sta gameState
+    sta playerState
+    // set up level
     jsr drawDashboard
     lda levelCounter
     cmp #1
     bne !+
-        lda #150
+        lda hPosition + 1
         sta $D000
-        lda #100
+        lda vPosition + 1
         sta $D001
         jsr initLevel1
         jmp continue
@@ -193,10 +211,6 @@ initLevel: {
     continue:
         jsr copyLevel
 
-    // set up player
-    lda #SPEED_TABLE_HALF_SIZE
-    sta verticalPosition
-    sta horizontalPosition
     // set up delay
     lda #ANIMATION_DELAY_MAX
     sta animationDelay
@@ -224,7 +238,7 @@ readJoy: {
 }
 
 // ==== Game physics ====
-updatePositions: {
+handleControls: {
     ldx animationDelay
     dex
     bne !+
@@ -246,76 +260,116 @@ updatePositions: {
     bne !+
     jsr joyRight
 !:
+    zeroWord(hAcceleration)
     jmp checkUp
 joyLeft:
-    lda horizontalPosition
-    beq checkUp
-    dec horizontalPosition
+    lda playerState
+    and #PLAYER_RIGHT
+    beq !+
+        lda playerState
+        and #(PLAYER_RIGHT ^ $FF)
+        sta playerState
+        zeroWord(hAcceleration)
+        zeroWord(hSpeed)
+        jmp checkUp
+!:
+    lda playerState
+    ora #PLAYER_LEFT
+    sta playerState
+    setWord(hAcceleration, VERTICAL_ACCELERATION)
     jmp checkUp
 joyRight:
-    lda horizontalPosition
-    cmp #(SPEED_TABLE_SIZE-1)
-    beq checkUp
-    inc horizontalPosition
+    lda playerState
+    and #PLAYER_LEFT
+    beq !+
+        lda playerState
+        and #(PLAYER_LEFT ^ $FF)
+        sta playerState
+        zeroWord(hAcceleration)
+        zeroWord(hSpeed)
+        jmp checkUp
+!:
+    lda playerState
+    ora #PLAYER_RIGHT
+    sta playerState
+    setWord(hAcceleration, VERTICAL_ACCELERATION)
 checkUp:
     lda joyState
     and #%00000001 // up
     bne !+
     jmp joyUp
 !:
-    lda verticalPosition
-    cmp #(SPEED_TABLE_SIZE-1)
-    beq end
-    inc verticalPosition  // here gravity works
-    jmp end
+    lda playerState
+    and #PLAYER_UP
+    beq !+
+        lda playerState
+        and #(PLAYER_UP ^ $FF)
+        sta playerState
+        setWord(vAcceleration, GRAVITY_ACCELERATION)
+        zeroWord(vSpeed)
+!:
+    rts
 joyUp:
-    lda verticalPosition
-    beq end
-    dec verticalPosition
-    jmp end
-end:
+    lda playerState
+    and #PLAYER_UP
+    bne !+
+        lda playerState
+        ora #PLAYER_UP
+        sta playerState
+        setWord(vAcceleration, UP_ACCELERATION)
+        zeroWord(vSpeed)
+!:
+    rts
+}
+
+updatePosition: {
+    // vertical
+    lda playerState
+    and #PLAYER_LEFT
+    beq !+
+        adcWord(hAcceleration, hSpeed, hSpeed)
+        sbcWord(hPosition, hSpeed, hPosition)
+        jmp vertical
+!:
+    lda playerState
+    and #PLAYER_RIGHT
+    beq !+
+        adcWord(hAcceleration, hSpeed, hSpeed)
+        adcWord(hSpeed, hPosition, hPosition)
+!:
+vertical:
+    lda playerState
+    and #PLAYER_UP
+    beq !+
+        adcWord(vAcceleration, vSpeed, vSpeed)
+        sbcWord(vPosition, vSpeed, vPosition)
+        rts
+!:
+        adcWord(vAcceleration, vSpeed, vSpeed)
+        adcWord(vPosition, vSpeed, vPosition)
     rts
 }
 
 animate: {
     // move player
-    lda $D000
-    ldx horizontalPosition
-    cpx #SPEED_TABLE_HALF_SIZE
-    bcs !+
-    jmp goLeft
+    lda hPosition + 1
+    sta $D000
+    lda vPosition + 1
+    sta $D001
+
+    lda playerState
+    and #PLAYER_LEFT
+    beq !+
+        setShapeForSprite(PLAYER_SHAPE_LEFT, PLAYER_SPRITE)
+        rts
 !:
-    bne goRight
+    lda playerState
+    and #PLAYER_RIGHT
+    beq !+
+        setShapeForSprite(PLAYER_SHAPE_RIGHT, PLAYER_SPRITE)
+        rts
+!:
     setShapeForSprite(PLAYER_SHAPE_NEUTRAL, PLAYER_SPRITE)
-    jmp animateVertical
-goLeft:
-    sec
-    sbc speedTable,x
-    sta $D000
-    setShapeForSprite(PLAYER_SHAPE_LEFT, PLAYER_SPRITE)
-    jmp animateVertical
-goRight:
-    clc
-    adc speedTable,x
-    sta $D000
-    setShapeForSprite(PLAYER_SHAPE_RIGHT, PLAYER_SPRITE)
-animateVertical:
-    lda $D001
-    ldx verticalPosition
-    cpx #SPEED_TABLE_HALF_SIZE
-    bcs !+
-    jmp goUp
-!:
-    bne goDown
-goUp:
-    sec
-    sbc speedTableVertical,x
-    sta $D001
-    rts
-goDown:
-    clc
-    adc speedTableVertical,x
-    sta $D001
     rts
 }
 
@@ -405,25 +459,52 @@ drawDashboard: {
     rts
 }
 
+// ==== aux routines ====
+.macro zeroWord(address) {
+    lda #0
+    sta address
+    sta address + 1
+}
+.macro setWord(address, value) {
+    lda #<value
+    sta address
+    lda #>value
+    sta address + 1
+}
+.macro adcWord(left, right, store) {
+    clc
+    lda left
+    adc right
+    sta store
+    lda left + 1
+    adc right + 1
+    sta store + 1
+}
+.macro sbcWord(left, right, store) {
+    sec
+    lda left
+    sbc right
+    sta store
+    lda left + 1
+    sbc right + 1
+    sta store + 1
+}
+
 // ==== variables ====
 levelCounter:       .byte 0
 livesCounter:       .byte 0
 joyState:           .byte 0
-verticalPosition:   .byte 0
-horizontalPosition: .byte 0
+vAcceleration:      .word 0
+hAcceleration:      .word 0
+vSpeed:             .word 0
+hSpeed:             .word 0
+vPosition:          .word 0
+hPosition:          .word 0
 animationDelay:     .byte 0
-gameState:          .byte 0
+gameState:          .byte 0 // %0000000a
+playerState:        .byte 0 // %00000abc a: left, b: right, c: up
 
 // ==== data ====
-.label SPEED_TABLE_HALF_SIZE = 8
-.label SPEED_TABLE_SIZE = (SPEED_TABLE_HALF_SIZE - 1)*2 + 1
-speedTable:     .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.02*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
-                .byte 0
-                .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.02*(i+1)*(i+1))
-speedTableVertical: .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.02*(SPEED_TABLE_HALF_SIZE - i)*(SPEED_TABLE_HALF_SIZE - i))
-                    .byte 0
-                    .fill SPEED_TABLE_HALF_SIZE - 1, ceil(0.01*(i+1)*(i+1))
-
 survivors1:    .byte 60, 85, 90, 221, 210, 221, 200, 141, 0
 
 colours:        .import binary "build/charpad/colours.bin"
