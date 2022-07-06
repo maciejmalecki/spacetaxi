@@ -253,12 +253,12 @@ handleControls: {
     lda joyState
     and #%00000100 // left
     bne !+
-    jsr joyLeft
+    jmp joyLeft
 !:
     lda joyState
     and #%00001000 // right
     bne !+
-    jsr joyRight
+    jmp joyRight
 !:
     zeroWord(hAcceleration)
     jmp checkUp
@@ -308,6 +308,7 @@ checkUp:
         setWord(vAcceleration, GRAVITY_ACCELERATION)
         zeroWord(vSpeed)
 !:
+    setWord(vAcceleration, GRAVITY_ACCELERATION)
     rts
 joyUp:
     lda playerState
