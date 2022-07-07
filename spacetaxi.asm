@@ -12,6 +12,7 @@
 .label GRAVITY_ACCELERATION = 5
 .label UP_ACCELERATION = 5
 .label VERTICAL_ACCELERATION = 5
+.label MAX_LEVEL = 3
 
 .label PLAYER_LEFT  = %00000100
 .label PLAYER_RIGHT = %00000010
@@ -27,8 +28,8 @@ start: {
     jsr initIRQ
     jsr initIO
     jsr initScreen
-    jsr drawTitleScreen
     outerMainLoop:
+        jsr drawTitleScreen
         jsr readJoy
         lda joyState
         and #%00010000
@@ -47,12 +48,27 @@ startGame: {
         lda gameState
         and #%00000001
         bne liveLost
+        lda $D015
+        and #%11111110
+        beq nextLevel
         jmp mainLoop
     liveLost:
         jsr disableIRQ
+        dec livesCounter
+        lda livesCounter
+        beq gameOver
+        jmp levelLoop
+    nextLevel:
+        jsr disableIRQ
+        inc levelCounter
+        lda levelCounter
+        cmp #MAX_LEVEL
+        beq gameOver
         jmp levelLoop
     gameOver:
-    jsr disableIRQ
+        lda #0
+        sta $D015 // hide all sprites
+        jsr disableIRQ
     rts
 }
 
@@ -143,30 +159,55 @@ initSprites: {
     ora #%00011111
     sta $D01C       // sprite 0 multicolor
     setShapeForSprite(PLAYER_SHAPE_NEUTRAL, PLAYER_SPRITE)
+    lda #10
+    sta $D028
+    sta $D029
+    sta $D02A
+    sta $D02B
+    rts
+}
+
+/*
+ * IN: A sprites lo, X sprites hi
+ */
+initSpritesForLevel: {
+    sta spritesAddr
+    stx spritesAddr + 1
+
     ldx #0
-!:
-    lda sprites1,x
-    beq endOfSprites
-    sta $D002,x
+    jsr loadSpriteByte
+    sta hPosition + 1
+    sta $D000,x
+    lda #0
+    sta hPosition
     inx
-    lda sprites1,x
-    sta $D002,x
+    jsr loadSpriteByte
+    sta vPosition + 1
+    sta $D000,x
+    lda #0
+    sta vPosition
+    inx
+!:
+    jsr loadSpriteByte
+    beq endOfSprites
+    sta $D000,x
+    inx
+    jsr loadSpriteByte
+    sta $D000,x
     inx
     jmp !-
 endOfSprites:
     .for (var i = 0; i < 4; i++) {
         setShapeForSprite(SURVIVOR_SHAPE, i + 1)
     }
-    lda #10
-    sta $D028
-    sta $D029
-    sta $D02A
-    sta $D02B
     lda $D015
     ora #%00011111
     sta $D015       // show sprite
     lda $D01F       // clear collision detection
     lda $D01E
+    rts
+loadSpriteByte:
+    lda spritesAddr:$FFFF,x
     rts
 }
 
@@ -185,8 +226,6 @@ initLevel: {
     zeroWord(hAcceleration)
     zeroWord(vSpeed)
     zeroWord(hSpeed)
-    setWord(hPosition, 256*150)
-    setWord(vPosition, 256*100)
     // set up state
     lda #0
     sta gameState
@@ -196,10 +235,6 @@ initLevel: {
     lda levelCounter
     cmp #1
     bne !+
-        lda hPosition + 1
-        sta $D000
-        lda vPosition + 1
-        sta $D001
         jsr initLevel1
         jmp continue
     !:
@@ -218,12 +253,18 @@ initLevel: {
 }
 
 initLevel1: {
+    lda #<sprites1
+    ldx #>sprites1
+    jsr initSpritesForLevel
     lda #<level1
     ldx #>level1
     rts
 }
 
 initLevel2: {
+    lda #<sprites2
+    ldx #>sprites2
+    jsr initSpritesForLevel
     lda #<level2
     ldx #>level2
     rts
@@ -457,6 +498,14 @@ drawDashboard: {
     lda #<dashboard
     ldx #>dashboard
     jsr copyDashboard
+    clc
+    lda levelCounter
+    adc #48
+    sta SCREEN + 40*9 + 34
+    clc
+    lda livesCounter
+    adc #48
+    sta SCREEN + 40*13 + 34
     rts
 }
 
@@ -506,7 +555,8 @@ gameState:          .byte 0 // %0000000a
 playerState:        .byte 0 // %00000abc a: left, b: right, c: up
 
 // ==== data ====
-sprites1:    .byte 60, 85, 90, 221, 210, 221, 200, 141, 0
+sprites1:       .byte 150, 100, 60, 85, 90, 221, 210, 221, 200, 141, 0
+sprites2:       .byte 45, 70, 80, 93, 85, 149, 170, 221, 180, 149, 0
 
 colours:        .import binary "build/charpad/colours.bin"
 titleScreen:    .import binary "build/charpad/title.bin"
