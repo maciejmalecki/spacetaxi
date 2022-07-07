@@ -61,6 +61,16 @@ preprocess {
                 interleaver {
                 }
             }
+            map {
+                top = 25
+                left = 58
+                right = 87
+                interleaver {
+                    output = file("level3.bin")
+                }
+                interleaver {
+                }
+            }
         }
     }
     spritepad {

@@ -12,7 +12,9 @@
 .label GRAVITY_ACCELERATION = 5
 .label UP_ACCELERATION = 5
 .label VERTICAL_ACCELERATION = 5
-.label MAX_LEVEL = 3
+
+.label LIVES = 5
+.label START_LEVEL = 1
 
 .label PLAYER_LEFT  = %00000100
 .label PLAYER_RIGHT = %00000010
@@ -68,7 +70,6 @@ startGame: {
     gameOver:
         lda #0
         sta $D015 // hide all sprites
-        jsr disableIRQ
     rts
 }
 
@@ -151,7 +152,11 @@ initScreen: {
     rts
 }
 
-initSprites: {
+initGame: {
+    lda #START_LEVEL
+    sta levelCounter
+    lda #LIVES
+    sta livesCounter
     // init player sprite
     lda #15
     sta $D027
@@ -203,20 +208,9 @@ endOfSprites:
     lda $D015
     ora #%00011111
     sta $D015       // show sprite
-    lda $D01F       // clear collision detection
-    lda $D01E
     rts
 loadSpriteByte:
     lda spritesAddr:$FFFF,x
-    rts
-}
-
-initGame: {
-    lda #1
-    sta levelCounter
-    lda #3
-    sta livesCounter
-    jsr initSprites
     rts
 }
 
@@ -232,41 +226,20 @@ initLevel: {
     sta playerState
     // set up level
     jsr drawDashboard
-    lda levelCounter
-    cmp #1
-    bne !+
-        jsr initLevel1
-        jmp continue
-    !:
-    cmp #2
-    bne !+
-        jsr initLevel2
-        jmp continue
-    !:
-    continue:
-        jsr copyLevel
-
+    ldy levelCounter
+    dey
+    lda spritesLo, y
+    ldx spritesHi, y
+    jsr initSpritesForLevel
+    lda caveLo, y
+    ldx caveHi, y
+    jsr copyLevel
+    // clear collision detection
+    lda $D01F
+    lda $D01E
     // set up delay
     lda #ANIMATION_DELAY_MAX
     sta animationDelay
-    rts
-}
-
-initLevel1: {
-    lda #<sprites1
-    ldx #>sprites1
-    jsr initSpritesForLevel
-    lda #<level1
-    ldx #>level1
-    rts
-}
-
-initLevel2: {
-    lda #<sprites2
-    ldx #>sprites2
-    jsr initSpritesForLevel
-    lda #<level2
-    ldx #>level2
     rts
 }
 
@@ -555,15 +528,22 @@ gameState:          .byte 0 // %0000000a
 playerState:        .byte 0 // %00000abc a: left, b: right, c: up
 
 // ==== data ====
+.label MAX_LEVEL = 4
+caveLo:         .byte <level1, <level2, <level3
+caveHi:         .byte >level1, >level2, >level3
+spritesLo:      .byte <sprites1, <sprites2, <sprites3
+spritesHi:      .byte >sprites1, >sprites2, >sprites3
+
 sprites1:       .byte 150, 100, 60, 85, 90, 221, 210, 221, 200, 141, 0
-sprites2:       .byte 45, 70, 80, 93, 85, 149, 170, 221, 180, 149, 0
+sprites2:       .byte 55, 70, 80, 221, 85, 140, 190, 221, 220, 133, 0
+sprites3:       .byte 45, 70, 80, 93, 85, 149, 170, 221, 180, 149, 0
 
 colours:        .import binary "build/charpad/colours.bin"
 titleScreen:    .import binary "build/charpad/title.bin"
 dashboard:      .import binary "build/charpad/dashboard.bin"
 level1:         .import binary "build/charpad/level1.bin"
 level2:         .import binary "build/charpad/level2.bin"
-
+level3:         .import binary "build/charpad/level3.bin"
 /*
  * To save time and coding efforts charset and sprites are moved straight to the target location within VIC-II address space
  * thus it is probably a good idea to pack the game with i.e. Exomizer after compiling.
