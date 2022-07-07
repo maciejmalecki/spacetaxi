@@ -8,7 +8,7 @@
 .label SURVIVOR_SHAPE = 3
 .label SHAPES_COUNT = 4
 .label PLAYER_SPRITE = 0
-.label ANIMATION_DELAY_MAX = 100
+.label ANIMATION_DELAY_MAX = 10
 .label GRAVITY_ACCELERATION = 5
 .label UP_ACCELERATION = 5
 .label VERTICAL_ACCELERATION = 5
@@ -145,11 +145,11 @@ initSprites: {
     setShapeForSprite(PLAYER_SHAPE_NEUTRAL, PLAYER_SPRITE)
     ldx #0
 !:
-    lda survivors1,x
+    lda sprites1,x
     beq endOfSprites
     sta $D002,x
     inx
-    lda survivors1,x
+    lda sprites1,x
     sta $D002,x
     inx
     jmp !-
@@ -241,7 +241,7 @@ readJoy: {
 handleControls: {
     ldx animationDelay
     dex
-    bne !+
+    beq !+
     stx animationDelay
     rts
 !:
@@ -506,7 +506,7 @@ gameState:          .byte 0 // %0000000a
 playerState:        .byte 0 // %00000abc a: left, b: right, c: up
 
 // ==== data ====
-survivors1:    .byte 60, 85, 90, 221, 210, 221, 200, 141, 0
+sprites1:    .byte 60, 85, 90, 221, 210, 221, 200, 141, 0
 
 colours:        .import binary "build/charpad/colours.bin"
 titleScreen:    .import binary "build/charpad/title.bin"
