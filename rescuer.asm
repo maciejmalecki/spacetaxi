@@ -1,21 +1,23 @@
 #import "build/charpad/metadata.asm"
-
+/// VIC-2
 .label SCREEN = $0400
 .label COLOUR_RAM = $D800
+// shapes
 .label PLAYER_SHAPE_NEUTRAL = 0
 .label PLAYER_SHAPE_LEFT = 1
 .label PLAYER_SHAPE_RIGHT = 2
 .label SURVIVOR_SHAPE = 3
 .label SHAPES_COUNT = 4
 .label PLAYER_SPRITE = 0
+// physics & controls
 .label ANIMATION_DELAY_MAX = 10
 .label GRAVITY_ACCELERATION = 5
 .label UP_ACCELERATION = 5
 .label VERTICAL_ACCELERATION = 5
-
+// game initials
 .label LIVES = 5
 .label START_LEVEL = 1
-
+// player state
 .label PLAYER_LEFT  = %00000100
 .label PLAYER_RIGHT = %00000010
 .label PLAYER_UP    = %00000001
@@ -23,10 +25,9 @@
 *=$0801 "Basic Upstart"
 BasicUpstart(start) // Basic start routine
 
-// Main program
-*=$080d "Program"
+*=$080d "Program" // Main program
 
-start: {
+start: { // outer game loop, handles title screen, launches the game
         jsr init
     outerMainLoop:
         jsr drawTitleScreen
@@ -41,7 +42,7 @@ start: {
         jmp titleScreenLoop
 }
 
-startGame: {
+startGame: { // main game routine
         jsr initGame
     levelLoop:
         jsr initLevel
@@ -73,7 +74,7 @@ startGame: {
     rts
 }
 
-doOnEachFrame: {
+doOnEachFrame: { // code to be executed at regular interval, i.e. in raster interrupt (50/60 times per sec)
     jsr handleControls
     jsr updatePlayerPosition
     jsr animatePlayer
@@ -82,8 +83,7 @@ doOnEachFrame: {
     jmp $EA31 // perform standard Kernal IRQ routine
 }
 
-// game initialization
-init: {
+init: { // game initialization
     // * init interrupt (IRQ) *
     sei
     // disable CIA#1 interrupts
@@ -96,13 +96,11 @@ init: {
     lda #>doOnEachFrame
     sta $0315
     cli
-
     // * init IO *
     // set IO pins for joy 2 to input
     lda $DC02
     and #%11100000
     sta $DC02
-
     // * init VIC-2 *
     // init colours
     lda #backgroundColour0
@@ -132,9 +130,9 @@ init: {
     rts
 }
 
-enableIRQ: {
+enableIRQ: { // starts to execute 'doOnEachFrame' logic
     lda #40
-    sta $D012
+    sta $D012 // setup raster IRQ at line 40
     lda $D011
     and #%0111111
     sta $D011
@@ -143,16 +141,13 @@ enableIRQ: {
     rts
 }
 
-disableIRQ: {
+disableIRQ: { // stops executing 'doOnEachFrame' logic
     lda #%00000000
     sta $D01A
     rts
 }
 
-/*
- * Initialization per individual game run.
- */
-initGame: {
+initGame: { // Initialization per individual game run.
     lda #START_LEVEL
     sta levelCounter
     lda #LIVES
@@ -171,10 +166,7 @@ initGame: {
     rts
 }
 
-/*
- * Initialization per each level.
- */
-initLevel: {
+initLevel: { // Initialization per each level.
     // set up player
     zeroWord(vAcceleration)
     zeroWord(hAcceleration)
@@ -203,10 +195,7 @@ initLevel: {
     rts
 }
 
-/*
- * Extra init for sprites per level. IN: A sprites lo, X sprites hi
- */
-initSpritesForLevel: {
+initSpritesForLevel: { // Extra init for sprites per level. IN: A sprites lo, X sprites hi
     // init address of sprite definition structure (there is a one per level)
     sta spritesAddr
     stx spritesAddr + 1
@@ -427,7 +416,6 @@ checkCollision: {
 }
 
 // ==== screen drawing routines ====
-
 /*
  * IN: A - source address lsb, X - source address hsb
  * DESTROYS: A,X,Y
