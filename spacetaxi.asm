@@ -27,43 +27,45 @@ BasicUpstart(start) // Basic start routine
 *=$080d "Program"
 
 start: {
-    jsr init
+        jsr init
     outerMainLoop:
         jsr drawTitleScreen
+    titleScreenLoop:
         jsr readJoy
         lda joyState
-        and #%00010000
+        and #%00010000 // check if fire is pressed to start the game
         bne !+
             jsr startGame
+            jmp outerMainLoop // jump outside outer main loop to redraw title screen
         !:
-    jmp outerMainLoop
+        jmp titleScreenLoop
 }
 
 startGame: {
-    jsr initGame
+        jsr initGame
     levelLoop:
         jsr initLevel
         jsr enableIRQ
     mainLoop:
         lda gameState
-        and #%00000001
+        and #%00000001 // check of die flag is on (live lost)
         bne liveLost
         lda $D015
-        and #%11111110
+        and #%00011110 // check if all survivors has been collected (their sprites are off) -> next level
         beq nextLevel
         jmp mainLoop
     liveLost:
         jsr disableIRQ
-        dec livesCounter
+        dec livesCounter // decrement lives counter
         lda livesCounter
-        beq gameOver
-        jmp levelLoop
+        beq gameOver // no lives left -> game over
+        jmp levelLoop // restart level
     nextLevel:
         jsr disableIRQ
-        inc levelCounter
+        inc levelCounter // increment level counter
         lda levelCounter
-        cmp #MAX_LEVEL
-        beq gameOver
+        cmp #MAX_LEVEL // max levels reached
+        beq gameOver // game is finished
         jmp levelLoop
     gameOver:
         lda #0
