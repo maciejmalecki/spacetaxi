@@ -27,9 +27,7 @@ BasicUpstart(start) // Basic start routine
 *=$080d "Program"
 
 start: {
-    jsr initIRQ
-    jsr initIO
-    jsr initScreen
+    jsr init
     outerMainLoop:
         jsr drawTitleScreen
         jsr readJoy
@@ -75,15 +73,16 @@ startGame: {
 
 doOnEachFrame: {
     jsr handleControls
-    jsr updatePosition
-    jsr animate
+    jsr updatePlayerPosition
+    jsr animatePlayer
     jsr checkCollision
     dec $D019 // clear interrupt flag
-    jmp $EA31
+    jmp $EA31 // perform standard Kernal IRQ routine
 }
 
 // game initialization
-initIRQ: {
+init: {
+    // * init interrupt (IRQ) *
     sei
     // disable CIA#1 interrupts
     lda #$7F
@@ -95,6 +94,39 @@ initIRQ: {
     lda #>doOnEachFrame
     sta $0315
     cli
+
+    // * init IO *
+    // set IO pins for joy 2 to input
+    lda $DC02
+    and #%11100000
+    sta $DC02
+
+    // * init VIC-2 *
+    // init colours
+    lda #backgroundColour0
+    sta $D020
+    sta $D021
+    lda #backgroundColour1
+    sta $D022
+    lda #backgroundColour2
+    sta $D023
+    // init sprite colours
+    lda #12
+    sta $D025
+    lda #11
+    sta $D026
+    // set charset mem bank to the last one (we'll use default screen location)
+    lda $D018
+    ora #%00001110
+    sta $D018
+    // set screen mode to multicolor
+    lda $D016
+    ora #%00010000
+    sta $D016
+    // set up shapes for sprites
+    .for (var i = 0; i < 4; i++) {
+        setShapeForSprite(SURVIVOR_SHAPE, i + 1)
+    }
     rts
 }
 
@@ -115,56 +147,21 @@ disableIRQ: {
     rts
 }
 
-initIO: {
-    // set IO pins for joy 2 to input
-    lda $DC02
-    and #%11100000
-    sta $DC02
-    rts
-}
-
-initScreen: {
-    // init colours
-    lda #backgroundColour0
-    sta $D020
-    sta $D021
-    lda #backgroundColour1
-    sta $D022
-    lda #backgroundColour2
-    sta $D023
-
-    // init sprite colours
-    lda #12
-    sta $D025
-    lda #11
-    sta $D026
-
-    // set charset mem bank to the last one (we'll use default screen location)
-    lda $D018
-    ora #%00001110
-    sta $D018
-
-    // set screen mode to multicolor
-    lda $D016
-    ora #%00010000
-    sta $D016
-
-    rts
-}
-
+/*
+ * Initialization per individual game run.
+ */
 initGame: {
     lda #START_LEVEL
     sta levelCounter
     lda #LIVES
     sta livesCounter
-    // init player sprite
-    lda #15
+    // * init sprite *
+    lda #15 // individual player sprite colour
     sta $D027
     lda $D01C
     ora #%00011111
-    sta $D01C       // sprite 0 multicolor
-    setShapeForSprite(PLAYER_SHAPE_NEUTRAL, PLAYER_SPRITE)
-    lda #10
+    sta $D01C // set multicolor for all sprites
+    lda #10 // common survivour sprite colour
     sta $D028
     sta $D029
     sta $D02A
@@ -173,47 +170,8 @@ initGame: {
 }
 
 /*
- * IN: A sprites lo, X sprites hi
+ * Initialization per each level.
  */
-initSpritesForLevel: {
-    sta spritesAddr
-    stx spritesAddr + 1
-
-    ldx #0
-    jsr loadSpriteByte
-    sta hPosition + 1
-    sta $D000,x
-    lda #0
-    sta hPosition
-    inx
-    jsr loadSpriteByte
-    sta vPosition + 1
-    sta $D000,x
-    lda #0
-    sta vPosition
-    inx
-!:
-    jsr loadSpriteByte
-    beq endOfSprites
-    sta $D000,x
-    inx
-    jsr loadSpriteByte
-    sta $D000,x
-    inx
-    jmp !-
-endOfSprites:
-    .for (var i = 0; i < 4; i++) {
-        setShapeForSprite(SURVIVOR_SHAPE, i + 1)
-    }
-    lda $D015
-    ora #%00011111
-    sta $D015       // show sprite
-    rts
-loadSpriteByte:
-    lda spritesAddr:$FFFF,x
-    rts
-}
-
 initLevel: {
     // set up player
     zeroWord(vAcceleration)
@@ -243,16 +201,61 @@ initLevel: {
     rts
 }
 
+/*
+ * Extra init for sprites per level. IN: A sprites lo, X sprites hi
+ */
+initSpritesForLevel: {
+    // init address of sprite definition structure (there is a one per level)
+    sta spritesAddr
+    stx spritesAddr + 1
+    // player horizontal position
+    ldx #0
+    jsr loadSpriteByte
+    sta hPosition + 1
+    sta $D000,x
+    lda #0
+    sta hPosition
+    // player vertical position
+    inx
+    jsr loadSpriteByte
+    sta vPosition + 1
+    sta $D000,x
+    lda #0
+    sta vPosition
+    inx
+!:  // for each survivors:
+    // survivor horizontal position
+    jsr loadSpriteByte
+    beq endOfSprites
+    sta $D000,x
+    inx
+    // survivor vertical position
+    jsr loadSpriteByte
+    sta $D000,x
+    inx
+    jmp !-
+endOfSprites:
+    // show all sprites
+    lda $D015
+    ora #%00011111
+    sta $D015
+    rts
+loadSpriteByte:
+    lda spritesAddr:$FFFF,x
+    rts
+}
+
 // ==== IO handling ====
 readJoy: {
     lda $DC00
     and #%00011111
-    sta joyState
+    sta joyState // take a snapshot of the joystick state
     rts
 }
 
 // ==== Game physics ====
 handleControls: {
+    // animation delay makes stearing a little bit sluggish
     ldx animationDelay
     dex
     beq !+
@@ -274,39 +277,41 @@ handleControls: {
     bne !+
     jmp joyRight
 !:
-    zeroWord(hAcceleration)
+    zeroWord(hAcceleration) // stop accelerating in h-axis if joy is not in left/right position
     jmp checkUp
 joyLeft:
     lda playerState
     and #PLAYER_RIGHT
     beq !+
+        // rotate to neutral
         lda playerState
         and #(PLAYER_RIGHT ^ $FF)
         sta playerState
-        zeroWord(hAcceleration)
-        zeroWord(hSpeed)
+        zeroWord(hAcceleration) // stop accelerating
+        zeroWord(hSpeed) // change direction, zero the speed
         jmp checkUp
 !:
     lda playerState
     ora #PLAYER_LEFT
     sta playerState
-    setWord(hAcceleration, VERTICAL_ACCELERATION)
+    setWord(hAcceleration, VERTICAL_ACCELERATION) // joy left, accelerate
     jmp checkUp
 joyRight:
     lda playerState
     and #PLAYER_LEFT
     beq !+
+        // rotate to neutral
         lda playerState
         and #(PLAYER_LEFT ^ $FF)
         sta playerState
-        zeroWord(hAcceleration)
-        zeroWord(hSpeed)
+        zeroWord(hAcceleration) // stop accelerating
+        zeroWord(hSpeed) // change direction, zero the speed
         jmp checkUp
 !:
     lda playerState
     ora #PLAYER_RIGHT
     sta playerState
-    setWord(hAcceleration, VERTICAL_ACCELERATION)
+    setWord(hAcceleration, VERTICAL_ACCELERATION) // joy right, accelerate
 checkUp:
     lda joyState
     and #%00000001 // up
@@ -319,10 +324,10 @@ checkUp:
         lda playerState
         and #(PLAYER_UP ^ $FF)
         sta playerState
-        setWord(vAcceleration, GRAVITY_ACCELERATION)
+        zeroWord(vAcceleration) // no up, stop up movement
         zeroWord(vSpeed)
 !:
-    setWord(vAcceleration, GRAVITY_ACCELERATION)
+    setWord(vAcceleration, GRAVITY_ACCELERATION) // let the gravity work
     rts
 joyUp:
     lda playerState
@@ -331,13 +336,13 @@ joyUp:
         lda playerState
         ora #PLAYER_UP
         sta playerState
-        setWord(vAcceleration, UP_ACCELERATION)
+        setWord(vAcceleration, UP_ACCELERATION) // accelerate upwards
         zeroWord(vSpeed)
 !:
     rts
 }
 
-updatePosition: {
+updatePlayerPosition: {
     // vertical
     lda playerState
     and #PLAYER_LEFT
@@ -365,13 +370,13 @@ vertical:
     rts
 }
 
-animate: {
+animatePlayer: {
     // move player
     lda hPosition + 1
     sta $D000
     lda vPosition + 1
     sta $D001
-
+    // decide which shape of the player should be displayed
     lda playerState
     and #PLAYER_LEFT
     beq !+
@@ -416,10 +421,8 @@ checkCollision: {
 // ==== screen drawing routines ====
 
 /*
- * IN:
- *   A - source address lsb
- *   X - source address hsb
- * DESTROYS: A, X, Y
+ * IN: A - source address lsb, X - source address hsb
+ * DESTROYS: A,X,Y
  */
 .macro copyScreenBlock(width, screenTarget, colorSource, colorTarget) {
     sta sourceAddress
@@ -482,7 +485,7 @@ drawDashboard: {
     rts
 }
 
-// ==== aux routines ====
+// ==== aux math routines ====
 .macro zeroWord(address) {
     lda #0
     sta address
@@ -524,7 +527,7 @@ hSpeed:             .word 0
 vPosition:          .word 0
 hPosition:          .word 0
 animationDelay:     .byte 0
-gameState:          .byte 0 // %0000000a
+gameState:          .byte 0 // %0000000a a: player died
 playerState:        .byte 0 // %00000abc a: left, b: right, c: up
 
 // ==== data ====
