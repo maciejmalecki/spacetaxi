@@ -347,26 +347,32 @@ updatePlayerPosition: {
     lda playerState
     and #PLAYER_LEFT
     beq !+
-        adcWord(hAcceleration, hSpeed, hSpeed)
+        jsr adcHAcceleration
         sbcWord(hPosition, hSpeed, hPosition)
         jmp vertical
 !:
     lda playerState
     and #PLAYER_RIGHT
     beq !+
-        adcWord(hAcceleration, hSpeed, hSpeed)
+        jsr adcHAcceleration
         adcWord(hSpeed, hPosition, hPosition)
 !:
 vertical:
     lda playerState
     and #PLAYER_UP
     beq !+
-        adcWord(vAcceleration, vSpeed, vSpeed)
+        jsr adcVAcceleration
         sbcWord(vPosition, vSpeed, vPosition)
         rts
 !:
-        adcWord(vAcceleration, vSpeed, vSpeed)
+        jsr adcVAcceleration
         adcWord(vPosition, vSpeed, vPosition)
+    rts
+adcHAcceleration:
+    adcWord(hAcceleration, hSpeed, hSpeed)
+    rts
+adcVAcceleration:
+    adcWord(vAcceleration, vSpeed, vSpeed)
     rts
 }
 
