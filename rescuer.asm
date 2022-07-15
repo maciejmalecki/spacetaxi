@@ -168,10 +168,10 @@ initGame: { // Initialization per individual game run.
 
 initLevel: { // Initialization per each level.
     // set up player
-    zeroWord(vAcceleration)
-    zeroWord(hAcceleration)
-    zeroWord(vSpeed)
-    zeroWord(hSpeed)
+    setWord(vAcceleration, 0)
+    setWord(hAcceleration, 0)
+    setWord(vSpeed, 0)
+    setWord(hSpeed, 0)
     // set up state
     lda #0
     sta gameState
@@ -268,7 +268,7 @@ handleControls: {
     bne !+
     jmp joyRight
 !:
-    zeroWord(hAcceleration) // stop accelerating in h-axis if joy is not in left/right position
+    setWord(hAcceleration, 0) // stop accelerating in h-axis if joy is not in left/right position
     jmp checkUp
 joyLeft:
     lda playerState
@@ -278,8 +278,8 @@ joyLeft:
         lda playerState
         and #(PLAYER_RIGHT ^ $FF)
         sta playerState
-        zeroWord(hAcceleration) // stop accelerating
-        zeroWord(hSpeed) // change direction, zero the speed
+        setWord(hAcceleration, 0) // stop accelerating
+        setWord(hSpeed, 0) // change direction, zero the speed
         jmp checkUp
 !:
     lda playerState
@@ -295,8 +295,8 @@ joyRight:
         lda playerState
         and #(PLAYER_LEFT ^ $FF)
         sta playerState
-        zeroWord(hAcceleration) // stop accelerating
-        zeroWord(hSpeed) // change direction, zero the speed
+        setWord(hAcceleration, 0) // stop accelerating
+        setWord(hSpeed, 0) // change direction, zero the speed
         jmp checkUp
 !:
     lda playerState
@@ -315,8 +315,8 @@ checkUp:
         lda playerState
         and #(PLAYER_UP ^ $FF)
         sta playerState
-        zeroWord(vAcceleration) // no up, stop up movement
-        zeroWord(vSpeed)
+        setWord(vAcceleration, 0) // no up, stop up movement
+        setWord(vSpeed, 0)
 !:
     setWord(vAcceleration, GRAVITY_ACCELERATION) // let the gravity work
     rts
@@ -328,7 +328,7 @@ joyUp:
         ora #PLAYER_UP
         sta playerState
         setWord(vAcceleration, UP_ACCELERATION) // accelerate upwards
-        zeroWord(vSpeed)
+        setWord(vSpeed, 0)
 !:
     rts
 }
@@ -476,11 +476,6 @@ drawDashboard: {
 }
 
 // ==== aux math routines ====
-.macro zeroWord(address) {
-    lda #0
-    sta address
-    sta address + 1
-}
 .macro setWord(address, value) {
     lda #<value
     sta address
