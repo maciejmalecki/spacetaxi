@@ -423,35 +423,29 @@ checkCollision: {
 .macro copyScreenBlock(width, screenTarget, colorSource, colorTarget) {
     sta sourceAddress
     stx sourceAddress + 1
-
-    .for(var line = 0; line < 25; line++) { // unroll outer loop
-        ldx #width
-        !:
-            dex
-            jsr loadSource                  // load source char code
-            tay                             // keep char code in Y
-            sta line*40 + screenTarget,x    // copy char code
-            lda colorSource,y               // decode color for given char code (now in Y)
-            sta line*40 + colorTarget,x     // set given color RAM location
-            cpx #0
-        bne !-
-    }
-    rts
-
-    loadSource:
-        lda sourceAddress:$ffff,x
+    setWord(destAddress, screenTarget)
+    setWord(colorDestAddress, colorTarget)
+    ldy #25
+nextLine:
+    ldx #width
+    nextChar:
+        dex
+        tya
+        pha
+        lda sourceAddress:$FFFF,x
+        tay
+        sta destAddress:$FFFF,x
+        lda colorSource,y
+        sta colorDestAddress:$FFFF,x
+        pla
+        tay
         cpx #0
-        bne !+
-            pha
-            clc
-            lda #width
-            adc sourceAddress
-            sta sourceAddress
-            lda #0
-            adc sourceAddress + 1
-            sta sourceAddress + 1
-            pla
-        !:
+    bne nextChar
+    adcWordValue(sourceAddress, width)
+    adcWordValue(destAddress, 40)
+    adcWordValue(colorDestAddress, 40)
+    dey
+    bne nextLine
     rts
 }
 
@@ -501,6 +495,15 @@ drawDashboard: {
     lda left + 1
     adc right + 1
     sta store + 1
+}
+.macro adcWordValue(address, value) {
+    clc
+    lda #<value
+    adc address
+    sta address
+    lda #>value
+    adc address + 1
+    sta address + 1
 }
 .macro sbcWord(left, right, store) {
     sec
